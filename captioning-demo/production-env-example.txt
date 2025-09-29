@@ -1,0 +1,16 @@
+# Production Environment Variables
+# Copy these to your Render and Vercel dashboards
+
+# Backend (Render) Environment Variables:
+NODE_ENV=production
+PORT=10000
+DEEPGRAM_API_KEY=your_deepgram_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+TRANSLITERATION_SERVICE_URL=https://hinglish-transliteration.onrender.com/transliterate
+FRONTEND_ORIGIN=https://your-vercel-app.vercel.app
+
+# Transliteration Service (Render) Environment Variables:
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Frontend (Vercel) Environment Variables:
+REACT_APP_API_BASE=https://hinglish-captioning-backend.onrender.com
