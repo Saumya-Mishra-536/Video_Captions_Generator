@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import captionsRoute from "./captions_offline.js";
+import captionsRoute from "./captions.js";
 
 const app = express();
 

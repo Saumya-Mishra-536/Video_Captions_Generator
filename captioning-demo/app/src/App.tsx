@@ -15,12 +15,24 @@ function App() {
   const [preset, setPreset] = useState("bottom");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [videoDuration, setVideoDuration] = useState(3000); // Default 100 seconds
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setVideoFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setVideoFile(file);
       setCaptions([]);
       setError("");
+      
+      // Get video duration
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        const duration = Math.ceil(video.duration * 30); // Convert to frames at 30fps
+        setVideoDuration(duration);
+        console.log(`📹 Video duration: ${video.duration}s (${duration} frames)`);
+      };
+      video.src = URL.createObjectURL(file);
     }
   };
 
@@ -38,6 +50,8 @@ function App() {
         formData
       );
       setCaptions(data.segments || []);
+      console.log(`📝 Generated ${data.segments?.length || 0} caption segments`);
+      console.log("📋 Captions:", data.segments);
     } catch {
       setError("❌ Caption generation failed. Please check backend.");
     } finally {
@@ -109,23 +123,62 @@ function App() {
 
       {/* Video Player Preview */}
       {videoFile && (
-        <div className="flex justify-center mt-12">
-          <Player
-            component={VideoComposition}
-            inputProps={{ videoFile, captions, preset }}
-            durationInFrames={3000}
-            fps={30}
-            compositionWidth={720}
-            compositionHeight={480}
-            style={{
-              width: "640px",
-              height: "360px",
-              borderRadius: "12px",
-              border: "4px solid white",
-              backgroundColor: "#000",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            }}
-          />
+        <div className="flex flex-col items-center mt-12 space-y-6">
+          {/* Remotion Player with Captions */}
+          <div className="relative">
+            <Player
+              component={VideoComposition}
+              inputProps={{ videoFile, captions, preset }}
+              durationInFrames={videoDuration}
+              fps={30}
+              compositionWidth={720}
+              compositionHeight={480}
+              style={{
+                width: "640px",
+                height: "360px",
+                borderRadius: "12px",
+                border: "4px solid white",
+                backgroundColor: "#000",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              }}
+              controls
+              loop
+              allowFullscreen
+              spaceKeyToPlayOrPause
+              doubleClickToFullscreen
+              showVolumeControls
+              clickToPlay
+              showPlaybackRateControl
+              showVolumeControls={true}
+            />
+            
+            {/* Caption Overlay Indicator */}
+            {captions.length > 0 && (
+              <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-sm font-bold">
+                📝 {captions.length} Captions
+              </div>
+            )}
+          </div>
+          
+          
+          {/* Caption Preview */}
+          {captions.length > 0 && (
+            <div className="bg-white/20 backdrop-blur-xl p-6 rounded-2xl shadow-2xl w-full max-w-4xl border border-white/30">
+              <h3 className="text-2xl font-bold mb-4 text-center">📝 Generated Captions ({captions.length} segments)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-60 overflow-y-auto">
+                {captions.map((caption, index) => (
+                  <div key={index} className="bg-white/10 p-3 rounded-lg">
+                    <div className="text-sm text-white/70 mb-1">
+                      {Math.floor(caption.start)}s - {Math.floor(caption.end)}s
+                    </div>
+                    <div className="text-white font-medium">
+                      {caption.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
