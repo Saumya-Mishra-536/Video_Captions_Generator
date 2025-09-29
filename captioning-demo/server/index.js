@@ -4,8 +4,9 @@ import captionsRoute from "./captions.js";
 
 const app = express();
 
-// ✅ CORS: Allow requests from React dev server (port 3000)
-app.use(cors({ origin: "http://localhost:3000" }));
+// ✅ CORS: Allow requests from configured frontend origin (fallback to localhost for dev)
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+app.use(cors({ origin: FRONTEND_ORIGIN }));
 
 // ✅ JSON body parser
 app.use(express.json());
@@ -19,7 +20,7 @@ app.get("/", (req, res) => {
 app.use("/captions", captionsRoute);
 
 // ✅ Start server
-const PORT = 5050;
+const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

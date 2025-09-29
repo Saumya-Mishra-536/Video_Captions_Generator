@@ -126,7 +126,23 @@ router.post("/generate", upload.single("video"), async (req, res) => {
     console.log("🎤 Calling Deepgram API...");
     console.log(`📤 Sending ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB of audio data to Deepgram`);
     
-    const response = await fetch('https://api.deepgram.com/v1/listen?model=general&punctuate=true&diarize=false&timestamps=true&multichannel=false&utterances=true&paragraphs=true&summarize=false', {
+    // Deepgram nova-3 with explicit multilingual language setting
+    const dgParams = new URLSearchParams({
+      model: 'nova-3',
+      smart_format: 'true',
+      punctuate: 'true',
+      diarize: 'false',
+      timestamps: 'true',
+      utterances: 'true',
+      paragraphs: 'true',
+      multichannel: 'false',
+      summarize: 'false',
+      language: 'multi',
+      numerals: 'true',
+      filler_words: 'false'
+    });
+
+    const response = await fetch(`https://api.deepgram.com/v1/listen?${dgParams.toString()}`, {
       method: 'POST',
       headers: {
         'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
@@ -164,6 +180,34 @@ router.post("/generate", upload.single("video"), async (req, res) => {
       return res.json({ segments: [] });
     }
     
+    // Helper: detect Devanagari
+    const hasDevanagari = (text) => /[\u0900-\u097F]/.test(text || "");
+
+    // Helper: transliterate using AI4Bharat microservice
+    const transliterationServiceUrl = process.env.TRANSLITERATION_SERVICE_URL || "http://localhost:8000/transliterate";
+    const toHinglish = async (text) => {
+      if (!text || !hasDevanagari(text)) return text || "";
+      try {
+        console.log(`🔤 Transliterating: "${text}"`);
+        const r = await fetch(transliterationServiceUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (!r.ok) {
+          console.warn(`⚠️ Transliteration service failed: ${r.status}`);
+          return text; // fallback
+        }
+        const j = await r.json();
+        const hinglishText = j.hinglish || text;
+        console.log(`✅ Transliterated: "${text}" -> "${hinglishText}"`);
+        return hinglishText;
+      } catch (error) {
+        console.warn(`⚠️ Transliteration error:`, error.message);
+        return text;
+      }
+    };
+
     // Group words into sentences for better captions
     const segments = [];
     let currentSegment = { start: 0, end: 0, text: '' };
@@ -187,10 +231,11 @@ router.post("/generate", upload.single("video"), async (req, res) => {
       
       if (hasPunctuation || isLongSegment || i === words.length - 1) {
         if (currentSegment.text.trim() !== '') {
+          const rawText = currentSegment.text.trim();
           segments.push({
             start: currentSegment.start,
             end: currentSegment.end,
-            text: currentSegment.text.trim()
+            text: rawText
           });
         }
         currentSegment = { start: word.end, end: word.end, text: '' };
@@ -200,31 +245,76 @@ router.post("/generate", upload.single("video"), async (req, res) => {
     // Ensure we have at least one segment
     if (segments.length === 0 && words.length > 0) {
       console.warn("⚠️ No segments created, creating fallback segment");
+      const rawText = words.map(w => w.word).join(' ');
       segments.push({
         start: words[0].start,
         end: words[words.length - 1].end,
-        text: words.map(w => w.word).join(' ')
+        text: rawText
       });
     }
     
     // If we have utterances and they provide better coverage, use them
     if (utterances.length > 0) {
-      const utteranceSegments = utterances.map(utterance => ({
+      const utteranceSegmentsRaw = utterances.map(utterance => ({
         start: utterance.start,
         end: utterance.end,
-        text: utterance.transcript.trim()
+        text: (utterance.transcript || '').trim()
       }));
       
       // Check if utterances provide better coverage
-      if (utteranceSegments.length > segments.length) {
+      if (utteranceSegmentsRaw.length > segments.length) {
         console.log("🗣️ Using utterances for better coverage");
-        segments.splice(0, segments.length, ...utteranceSegments);
+        segments.splice(0, segments.length, ...utteranceSegmentsRaw);
+      }
+    }
+
+    // Transliterate any Devanagari segments to Hinglish via microservice (batch processing)
+    const devanagariCount = segments.filter(s => hasDevanagari(s.text)).length;
+    console.log(`🔡 Found ${devanagariCount} segments with Devanagari text`);
+    
+    let segmentsWithHinglish = segments;
+    if (devanagariCount > 0) {
+      try {
+        // Use batch processing to reduce API calls
+        const devanagariSegments = segments.filter(s => hasDevanagari(s.text));
+        const devanagariTexts = devanagariSegments.map(s => s.text);
+        
+        console.log(`🔤 Batch transliterating ${devanagariTexts.length} texts...`);
+        const batchResponse = await fetch(`${transliterationServiceUrl.replace('/transliterate', '/transliterate-batch')}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: devanagariTexts })
+        });
+        
+        if (batchResponse.ok) {
+          const batchResult = await batchResponse.json();
+          const hinglishTexts = batchResult.hinglish_texts || [];
+          
+          // Map back to segments
+          let hinglishIndex = 0;
+          segmentsWithHinglish = segments.map(s => {
+            if (hasDevanagari(s.text)) {
+              const hinglishText = hinglishTexts[hinglishIndex] || s.text;
+              hinglishIndex++;
+              return { ...s, text: hinglishText };
+            }
+            return s;
+          });
+          
+          const stillDevanagari = segmentsWithHinglish.filter(s => hasDevanagari(s.text)).length;
+          console.log(`🔡 Batch transliteration: had ${devanagariCount} Devanagari segments, after=${stillDevanagari}`);
+        } else {
+          console.warn(`⚠️ Batch transliteration failed, using original text`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Batch transliteration failed, using original text:`, error.message);
+        // Keep original segments if transliteration fails
       }
     }
     
-    console.log(`📝 Generated ${segments.length} caption segments`);
+    console.log(`📝 Generated ${segmentsWithHinglish.length} caption segments`);
     
-    res.json({ segments });
+    res.json({ segments: segmentsWithHinglish });
     
   } catch (error) {
     console.error("❌ Transcription error:", error);

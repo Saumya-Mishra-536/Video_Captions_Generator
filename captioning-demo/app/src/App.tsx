@@ -45,8 +45,9 @@ function App() {
     formData.append("video", videoFile);
 
     try {
+      const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:5050").replace(/\/$/, "");
       const { data } = await axios.post<{ segments: CaptionSegment[] }>(
-        "http://localhost:5050/captions/generate",
+        `${API_BASE}/captions/generate`,
         formData
       );
       setCaptions(data.segments || []);
@@ -146,7 +147,6 @@ function App() {
               allowFullscreen
               spaceKeyToPlayOrPause
               doubleClickToFullscreen
-              showVolumeControls
               clickToPlay
               showPlaybackRateControl
               showVolumeControls={true}
