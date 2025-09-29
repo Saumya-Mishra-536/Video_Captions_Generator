@@ -66,7 +66,7 @@ git push -u origin main
    DEEPGRAM_API_KEY=your_deepgram_api_key_here
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    TRANSLITERATION_SERVICE_URL=https://hinglish-transliteration.onrender.com/transliterate
-   FRONTEND_ORIGIN=https://your-vercel-app.vercel.app
+   FRONTEND_ORIGIN=https://video-captions-generator.vercel.app/
    ```
 
 5. Click "Create Web Service"
