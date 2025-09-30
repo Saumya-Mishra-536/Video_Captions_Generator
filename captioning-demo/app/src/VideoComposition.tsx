@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Video, AbsoluteFill, useVideoConfig, useCurrentFrame, interpolate } from "remotion";
+import { Video, AbsoluteFill, useVideoConfig, useCurrentFrame } from "remotion";
 import { BottomCaption, TopBarCaption, KaraokeCaption } from "./CaptionStyles";
 
 interface Props {
