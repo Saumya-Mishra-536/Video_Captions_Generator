@@ -1,103 +1,131 @@
-A local web application to upload MP4 videos, auto-generate captions (including Hinglish), and render them over the video using Remotion. The app supports multiple caption styles and provides real-time preview.
+Hinglish Captioning Demo
+A full-stack app that auto-generates Hinglish captions for videos. Upload an MP4, get clean, styled captions that handle real-world Hindi + English speech, and preview them directly in your browser.
 
-Project Structure
-simora.ai/
-│
-├─ captioning-demo/
-│   ├─ app/        # Frontend (React + Remotion)
-│   └─ server/     # Backend (Node.js / Express)
-│
-├─ README.md
+What it does:
+Upload an MP4 video.
+Speech is transcribed with Deepgram.
+Hindi (Devanagari) words are automatically converted to Hinglish (Romanized Hindi).
+Captions are previewed in the browser using Remotion with multiple styles:
+🎵 Karaoke (center, bold cyan)
+⬇️ Bottom (yellow, shorts/reels style)
+⬆️ Top Bar (compact white label)
+Provides a segment list for quick review and editing.
 
-Features:
-Upload MP4 videos from your local machine.
-Auto-generate captions using Deepgram STT API.
-Support for Hinglish captions (Devanagari + Latin characters).
-2–3 predefined caption styles (bottom-centered, top bar, karaoke-style).
-Real-time preview of captioned videos in the browser.
-Export captioned video as MP4 using Remotion.
+ Why it matters
+Mixed-language (Hinglish) speech is common in social content.
+Standard captioning tools often break on Hindi/English mixes.
+This app ensures captions stay clean, readable, and engaging for platforms like YouTube Shorts, Instagram Reels, and TikTok.
 
-Prerequisites
-Node.js >= 18.x
-npm (comes with Node.js)
-VS Code (recommended for running locally)
-Deepgram API Key (sign up at https://deepgram.com
-)
-Optional: Install ffmpeg if using local video/audio processing.
+ End-to-End User Flow
+Open the web app → upload an MP4.
+Backend extracts audio and sends it to Deepgram → returns word-level timestamps.
+Segments are built and Hindi text is transliterated to Hinglish.
+Browser previews captions in real time using Remotion.
 
-Setup Instructions
-1. Clone the repository
-git clone https://github.com/<your-username>/simora.ai.git
-cd simora.ai/captioning-demo
+High-Level Architecture
+Frontend (React + Remotion)
+        │
+        ▼
+Backend (Node.js + Express)
+        │
+  ┌─────┴─────┐
+  ▼           ▼
+Deepgram ASR  Transliteration Service (FastAPI + OpenRouter + fallback)
 
-2. Install dependencies
-Backend (server folder)
+Frontend:
+Built with React + Remotion.
+Handles uploads, playback, and caption overlay.
+Supports 3 styles (Bottom, Top, Karaoke).
+
+Backend (Node.js + Express):
+Receives MP4 uploads (via Multer).
+Extracts audio using FFmpeg (mono, 16kHz, cleaned audio).
+Calls Deepgram ASR for transcription.
+Segments words into readable captions.
+Calls transliteration service when Hindi text is detected.
+Returns caption JSON.
+
+Transliteration Service (Python + FastAPI)
+Converts Hindi → Hinglish.
+Endpoints: /transliterate and /transliterate-batch.
+Uses OpenRouter/OpenAI models.
+Rate limiting + fallback dictionary (no downtime when API quota is hit).
+
+Tech Stack:
+Frontend: React, Remotion, TailwindCSS
+Backend: Node.js, Express, Multer, FFmpeg
+ASR: Deepgram (multilingual transcription)
+Transliteration: Python FastAPI + OpenRouter/OpenAI + fallback dictionary
+Infra ready for: Render (backend), Vercel (frontend)
+
+Installation & Setup
+1. Clone the repo
+git clone <your-github-repo-url>
+cd hinglish-captioning-demo
+
+2. Environment Variables
+Create .env files for backend & transliteration service.
+
+Backend (server/.env):
+
+DEEPGRAM_API_KEY=your-deepgram-key
+FRONTEND_ORIGIN=http://localhost:3000
+TRANSLITERATION_SERVICE_URL=http://localhost:8000
+
+
+Transliteration (transliteration/.env):
+OPENROUTER_API_KEY=your-openrouter-key
+
+3. Install dependencies
+Backend
 cd server
 npm install
 
-Frontend (app folder)
-cd ../app
+Frontend
+cd app
 npm install
 
-3. Configure Deepgram
-Create a .env file in the server folder:
-DEEPGRAM_API_KEY=your_deepgram_api_key_here
+Transliteration
+cd transliteration
+pip install -r requirements.txt
+
+4. Run locally
+Start all services:
+
+# From project root
+./start_all.sh
 
 
-Make sure .env is added to .gitignore so your API key is not pushed.
+Frontend → http://localhost:3000
+Backend API → http://localhost:5050
+Transliteration → http://localhost:8000
 
-4. Start the application
-Start backend server
-cd ../server
-npm start
+Stop services:
+./stop_all.sh
 
-Start frontend app
-cd ../app
-npm start
+Deployment
+
+Push repo to GitHub.
+Backend (server/) → Deploy to Render
+.
+Frontend (app/) → Deploy to Vercel
+.
+Add environment variables in Render + Vercel:
+DEEPGRAM_API_KEY
+OPENROUTER_API_KEY
+FRONTEND_ORIGIN (your Vercel URL)
+Detailed deployment instructions: see DEPLOYMENT.md
+.
+
+Reliability & Resilience
+Validates uploads (format, audio quality, duration).
+Logs every FFmpeg, Deepgram, and transliteration call.
+Cleans up temporary files after each run.
+Falls back to dictionary-based transliteration when API quota is exceeded.
 
 
-Open your browser at http://localhost:3000 (or the port shown in terminal).
-You should see the Captioning Demo UI.
-
-5. Upload and Caption a Video
-Click Upload MP4 and select a video.
-Press Auto-generate captions.
-Backend will send the audio to Deepgram for transcription.
-Captions (including Hinglish text) will be returned to the frontend.
-Choose a caption preset style from the dropdown.
-The video with rendered captions will appear in the preview.
-Backend flow (simplified):
-Receive MP4 upload.
-Extract audio from video (if needed).
-Send audio to Deepgram API.
-Receive caption text in JSON.
-Send caption data back to frontend.
-Frontend renders captions using Remotion with selected style.
-
-6. Export Video
-After selecting captions, click Export Video (or follow Remotion’s local render command):
-
-# From app folder
-npx remotion render src/VideoWithCaptions.tsx out/video.mp4
-
-This will save the captioned video as video.mp4 locally.
-
-Notes
-
-Only 2–3 caption presets are included; no timeline editor or frame-by-frame placement.
-Supports Hinglish captions — ensure fonts like Noto Sans Devanagari + Noto Sans.
-Backend handles video upload and Deepgram transcription.
-Frontend renders captions with Remotion Player for preview.
-Optional / Bonus Features
-
-Import/export SRT/VTT files.
-Word-level karaoke effect.
-Modular code, TypeScript, or containerized setup (Docker/devcontainer).
-
-Sample Video
-Include one sample MP4 and its captioned output in sample/ folder.
-
-References
-Remotion Documentation
-Deepgram Speech-to-Text API
-React
+ Extensibility
+Export captions to SRT/WEBVTT or burn into MP4.
+Add more caption styles, fonts, brand templates.
+Plug in other ASR engines (Google, Whisper, etc.).
+Improve dictionary and add multi-language support.
